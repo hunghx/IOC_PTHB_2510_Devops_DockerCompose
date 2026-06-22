@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: enrollment-service
+  datasource:
+    url: ${ENROLL_DB_URL:jdbc:postgresql://localhost:5432/enrolldb}
+    username: ${ENROLL_DB_USER:enroll_user}
+    password: ${ENROLL_DB_PASS:password}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+server:
+  port: ${SERVER_PORT:8083}
+
+course:
+  service:
+    url: ${COURSE_SERVICE_URL:http://localhost:8082}
+user:
+  service:
+    url: ${USER_SERVICE_URL:http://localhost:8081}

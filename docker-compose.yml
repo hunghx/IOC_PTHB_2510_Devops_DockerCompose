@@ -1,0 +1,147 @@
+services:
+
+  # ============================================================
+  # Infrastructure
+  # ============================================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: edu-postgres
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: edu-rabbitmq
+    env_file: .env
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ============================================================
+  # Application Services
+  # ============================================================
+
+  auth-service:
+    build: ./auth-service
+    container_name: edu-auth-service
+    env_file: .env
+    environment:
+      AUTH_DB_URL: jdbc:postgresql://postgres:5432/${AUTH_DB_NAME}
+      AUTH_DB_USER: ${AUTH_DB_USER}
+      AUTH_DB_PASS: ${AUTH_DB_PASS}
+      SERVER_PORT: ${AUTH_PORT}
+    ports:
+      - "${AUTH_PORT}:${AUTH_PORT}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
+
+  course-service:
+    build: ./course-service
+    container_name: edu-course-service
+    env_file: .env
+    environment:
+      COURSE_DB_URL: jdbc:postgresql://postgres:5432/${COURSE_DB_NAME}
+      COURSE_DB_USER: ${COURSE_DB_USER}
+      COURSE_DB_PASS: ${COURSE_DB_PASS}
+      USER_SERVICE_URL: http://auth-service:${AUTH_PORT}
+      SERVER_PORT: ${COURSE_PORT}
+    ports:
+      - "${COURSE_PORT}:${COURSE_PORT}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    restart: on-failure
+
+  enrollment-service:
+    build: ./enrollment-service
+    container_name: edu-enrollment-service
+    env_file: .env
+    environment:
+      ENROLL_DB_URL: jdbc:postgresql://postgres:5432/${ENROLL_DB_NAME}
+      ENROLL_DB_USER: ${ENROLL_DB_USER}
+      ENROLL_DB_PASS: ${ENROLL_DB_PASS}
+      USER_SERVICE_URL: http://auth-service:${AUTH_PORT}
+      COURSE_SERVICE_URL: http://course-service:${COURSE_PORT}
+      SERVER_PORT: ${ENROLLMENT_PORT}
+    ports:
+      - "${ENROLLMENT_PORT}:${ENROLLMENT_PORT}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      course-service:
+        condition: service_started
+    restart: on-failure
+
+  notification-service:
+    build: ./notification-service
+    container_name: edu-notification-service
+    env_file: .env
+    environment:
+      NOTIFICATION_DB_URL: jdbc:postgresql://postgres:5432/${NOTIFICATION_DB_NAME}
+      NOTIFICATION_DB_USER: ${NOTIFICATION_DB_USER}
+      NOTIFICATION_DB_PASS: ${NOTIFICATION_DB_PASS}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: ${RABBITMQ_PORT}
+      RABBITMQ_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_PASS: ${RABBITMQ_DEFAULT_PASS}
+      SERVER_PORT: ${NOTIFICATION_PORT}
+    ports:
+      - "${NOTIFICATION_PORT}:${NOTIFICATION_PORT}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: edu-api-gateway
+    env_file: .env
+    environment:
+      SERVER_PORT: ${GATEWAY_PORT}
+      AUTH_SERVICE_URL: http://auth-service:${AUTH_PORT}
+      COURSE_SERVICE_URL: http://course-service:${COURSE_PORT}
+      ENROLLMENT_SERVICE_URL: http://enrollment-service:${ENROLLMENT_PORT}
+      NOTIFICATION_SERVICE_URL: http://notification-service:${NOTIFICATION_PORT}
+    ports:
+      - "8888:${GATEWAY_PORT}"
+    depends_on:
+      - auth-service
+      - course-service
+      - enrollment-service
+      - notification-service
+    restart: on-failure
+
+volumes:
+  postgres-data:
+  rabbitmq-data:

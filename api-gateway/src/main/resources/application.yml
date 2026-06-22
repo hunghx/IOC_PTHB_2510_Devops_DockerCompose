@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: auth
+          uri: ${AUTH_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/auth/**,/users/**
+          filters:
+            - StripPrefix=0
+        - id: course
+          uri: ${COURSE_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/courses/**
+          filters:
+            - StripPrefix=0
+        - id: enrollment
+          uri: ${ENROLLMENT_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/enrollments/**
+          filters:
+            - StripPrefix=0
+        - id: notification
+          uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/notifications/**
+          filters:
+            - StripPrefix=0
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
