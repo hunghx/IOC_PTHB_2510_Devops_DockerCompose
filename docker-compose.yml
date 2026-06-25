@@ -134,7 +134,7 @@ services:
       ENROLLMENT_SERVICE_URL: http://enrollment-service:${ENROLLMENT_PORT}
       NOTIFICATION_SERVICE_URL: http://notification-service:${NOTIFICATION_PORT}
     ports:
-      - "8888:${GATEWAY_PORT}"
+      - "${GATEWAY_PORT}:${GATEWAY_PORT}"
     depends_on:
       - auth-service
       - course-service
